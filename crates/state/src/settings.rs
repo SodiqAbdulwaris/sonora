@@ -40,6 +40,7 @@ use ui::{
 
 use self::equalizer::Profile;
 use crate::equalizer::DeviceRule;
+use crate::overlay::{Corner, Invalid, Shape, Shortcut};
 use crate::pins::PinSort;
 use crate::queue::{Resume, gap_target};
 use crate::updates::{Channel, updates_itself};
@@ -439,6 +440,22 @@ struct Values {
     close_to_tray: bool,
     tray_icon: bool,
     stay_awake: bool,
+    /// Whether the always-on-top mini player is on.
+    overlay: bool,
+    /// The shape the overlay takes, by its settings name.
+    overlay_shape: String,
+    /// The preset along the top edge the overlay stands at, by its settings name.
+    overlay_corner: String,
+    /// Whether clicks pass through the overlay to what is under it.
+    overlay_click_through: bool,
+    /// Whether the overlay shows by itself while the main window is minimised.
+    overlay_auto_show: bool,
+    /// Whether the overlay stays above every other window.
+    overlay_on_top: bool,
+    /// The global shortcut that shows or hides the overlay, written like `Alt+Shift+O`.
+    overlay_toggle: String,
+    /// The global shortcut that lets clicks through the overlay or takes them again.
+    overlay_click_shortcut: String,
     language: String,
     #[serde(default = "system_font")]
     font: String,
@@ -643,6 +660,14 @@ impl Default for Values {
             close_to_tray: true,
             tray_icon: true,
             stay_awake: true,
+            overlay: false,
+            overlay_shape: Shape::default().id().to_owned(),
+            overlay_corner: Corner::default().id().to_owned(),
+            overlay_click_through: false,
+            overlay_auto_show: false,
+            overlay_on_top: true,
+            overlay_toggle: Shortcut::TOGGLE.to_string(),
+            overlay_click_shortcut: Shortcut::CLICK_THROUGH.to_string(),
             language: i18n::AUTO.to_owned(),
             font: system_font(),
             startup: DEFAULT_STARTUP.to_owned(),
@@ -1197,6 +1222,49 @@ impl AppSettings {
     /// Whether music keeps the system awake and, in fullscreen, the display.
     pub fn stay_awake(&self) -> bool {
         self.values.stay_awake
+    }
+
+    pub fn overlay(&self) -> bool {
+        self.values.overlay
+    }
+
+    /// The overlay's shape. A name this build does not know reads as the pill.
+    pub fn overlay_shape(&self) -> Shape {
+        Shape::from_id(&self.values.overlay_shape).unwrap_or_default()
+    }
+
+    /// Where the overlay stands. A name this build does not know reads as the top centre.
+    pub fn overlay_corner(&self) -> Corner {
+        Corner::from_id(&self.values.overlay_corner).unwrap_or_default()
+    }
+
+    pub fn overlay_click_through(&self) -> bool {
+        self.values.overlay_click_through
+    }
+
+    pub fn overlay_auto_show(&self) -> bool {
+        self.values.overlay_auto_show
+    }
+
+    pub fn overlay_on_top(&self) -> bool {
+        self.values.overlay_on_top
+    }
+
+    /// The shortcut that shows or hides the overlay. Text that is not a shortcut, as a hand edit
+    /// can leave, reads as the default.
+    pub fn overlay_toggle(&self) -> Shortcut {
+        self.values
+            .overlay_toggle
+            .parse()
+            .unwrap_or(Shortcut::TOGGLE)
+    }
+
+    /// The shortcut that lets clicks through the overlay, or takes them again.
+    pub fn overlay_click_shortcut(&self) -> Shortcut {
+        self.values
+            .overlay_click_shortcut
+            .parse()
+            .unwrap_or(Shortcut::CLICK_THROUGH)
     }
 
     /// Every linked scrobbling account, keyed by its service slug.
@@ -1798,6 +1866,60 @@ impl AppSettings {
     pub fn set_tray_icon(&mut self, tray_icon: bool, cx: &mut Context<Self>) {
         self.values.tray_icon = tray_icon;
         self.schedule_save(cx);
+    }
+
+    pub fn set_overlay(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.values.overlay = on;
+        self.schedule_save(cx);
+    }
+
+    pub fn set_overlay_shape(&mut self, shape: Shape, cx: &mut Context<Self>) {
+        self.values.overlay_shape = shape.id().to_owned();
+        self.schedule_save(cx);
+    }
+
+    pub fn set_overlay_corner(&mut self, corner: Corner, cx: &mut Context<Self>) {
+        self.values.overlay_corner = corner.id().to_owned();
+        self.schedule_save(cx);
+    }
+
+    pub fn set_overlay_click_through(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.values.overlay_click_through = on;
+        self.schedule_save(cx);
+    }
+
+    pub fn set_overlay_auto_show(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.values.overlay_auto_show = on;
+        self.schedule_save(cx);
+    }
+
+    pub fn set_overlay_on_top(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.values.overlay_on_top = on;
+        self.schedule_save(cx);
+    }
+
+    /// Sets the shortcut that shows or hides the overlay, or says why the text is not one.
+    pub fn set_overlay_toggle(
+        &mut self,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) -> Result<(), Invalid> {
+        let shortcut: Shortcut = text.parse()?;
+        self.values.overlay_toggle = shortcut.to_string();
+        self.schedule_save(cx);
+        Ok(())
+    }
+
+    /// Sets the shortcut that lets clicks through the overlay, or says why the text is not one.
+    pub fn set_overlay_click_shortcut(
+        &mut self,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) -> Result<(), Invalid> {
+        let shortcut: Shortcut = text.parse()?;
+        self.values.overlay_click_shortcut = shortcut.to_string();
+        self.schedule_save(cx);
+        Ok(())
     }
 
     pub fn set_stay_awake(&mut self, stay_awake: bool, cx: &mut Context<Self>) {

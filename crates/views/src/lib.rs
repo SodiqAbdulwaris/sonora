@@ -1,4 +1,5 @@
 mod chrome;
+mod overlay;
 mod root;
 mod screens;
 mod shared;
@@ -7,6 +8,7 @@ mod shells;
 pub use chrome::ToastStack;
 #[cfg(target_os = "macos")]
 pub use chrome::traffic_lights;
+pub use overlay::{DISC as OVERLAY_DISC, OverlayView, PILL as OVERLAY_PILL};
 pub use root::Root;
 use screens::artist::ArtistView;
 use screens::detail::DetailView;

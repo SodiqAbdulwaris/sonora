@@ -1438,3 +1438,63 @@ response-graph-readout = { $frequency } · { $direction ->
         [down] -{ $gain }
        *[flat] { $gain }
     } dB
+
+settings-group-spotify-route = Spotify audio
+settings-spotify-route = Audio route
+settings-spotify-route-detail = Where Spotify's sound comes from. Soloist is Spotify's own player and plays on accounts librespot is refused, but it bypasses the equalizer
+settings-spotify-route-auto = Automatic
+settings-spotify-route-soloist = Soloist
+settings-spotify-route-librespot = librespot
+settings-spotify-route-none = Chosen with the first track
+settings-spotify-route-status = Playing through
+settings-spotify-route-status-detail = Every route you allow is working
+settings-spotify-soloist-expiry = { $count ->
+    [one] This Soloist build expires in { $count } day. Download a new one from Spotify
+   *[other] This Soloist build expires in { $count } days. Download a new one from Spotify
+}
+settings-spotify-problem-no-soloist = Soloist is not installed. Download it from Spotify and put soloist in Sonora's soloist folder
+settings-spotify-problem-no-key = Soloist has no API key yet. Make one in your Spotify developer dashboard and save it below
+settings-spotify-problem-pairing = Soloist is not paired. Open Spotify on a phone or computer on this network and pick the Sonora Soloist device once
+settings-spotify-problem-expired = This Soloist build has expired. Download a new one from Spotify
+settings-spotify-problem-stopped = Soloist stopped: { $why }
+settings-spotify-problem-refused = Spotify refused this account the keys to its audio
+settings-soloist-key = Soloist API key
+settings-soloist-key-detail = The key from your Spotify developer dashboard that Soloist starts with
+settings-soloist-key-set = A key is saved in the system credential store. Paste a new one to replace it
+settings-soloist-key-unset = Kept in the system credential store, never in a file. Soloist may show it to other programs you run while it starts
+settings-soloist-key-hint = Paste the API key
+settings-soloist-key-save = Save
+toast-soloist-key-saved = Soloist API key saved. It is used the next time Spotify starts playing
+toast-soloist-key-failed = Sonora could not store the Soloist API key
+
+overlay-label = Mini player
+overlay-nothing = Nothing playing
+overlay-disc = Mini player disc. Click to play or pause, double-click to open the player
+overlay-click-through = Let clicks pass through
+overlay-fold = Fold into a disc
+toast-overlay-shortcut-taken = Another program already uses a shortcut of the mini player
+
+settings-group-overlay = Mini player
+settings-overlay = Show the mini player
+settings-overlay-detail = A small player that stays above other windows, so you can control the music without switching to Sonora
+settings-overlay-corner = Position
+settings-overlay-corner-detail = Where along the top of the screen the mini player stands
+settings-overlay-corner-top-left = Top left
+settings-overlay-corner-top-center = Top middle
+settings-overlay-corner-top-right = Top right
+settings-overlay-through = Let clicks pass through
+settings-overlay-through-detail = Clicks reach the window under the mini player, which dims. Turn it off with the click-through shortcut
+settings-overlay-auto-show = Show while Sonora is minimised
+settings-overlay-auto-show-detail = The mini player appears when the Sonora window is minimised or closed and goes away when it is back in front
+settings-overlay-on-top = Stay above other windows
+settings-overlay-on-top-detail = Keeps the mini player in front of the program you are using
+settings-overlay-toggle = Show or hide shortcut
+settings-overlay-toggle-detail = Works in any program, written like Alt+Shift+O. It needs at least one of Ctrl, Alt, Shift or Win
+settings-overlay-click-shortcut = Click-through shortcut
+settings-overlay-click-shortcut-detail = Lets clicks pass through the mini player, or takes them again. It works in any program
+settings-overlay-shortcut-hint = Alt+Shift+O
+settings-overlay-shortcut-save = Apply
+toast-overlay-shortcut-incomplete = A shortcut needs a key and at least one of Ctrl, Alt, Shift or Win
+toast-overlay-shortcut-key = Sonora does not know that key. Use a letter, a digit or F1 to F12
+tray-overlay = Mini player
+tray-through = Let clicks pass through the mini player

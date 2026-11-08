@@ -11,6 +11,7 @@ mod gestures;
 mod http;
 mod logging;
 mod memory;
+mod overlay;
 mod single;
 #[cfg(windows)]
 mod thumbbar;
@@ -195,6 +196,7 @@ fn main() -> ExitCode {
         #[cfg(target_os = "macos")]
         gestures::install(cx);
         memory::watch(cx);
+        overlay::install(cx);
 
         open_window(cx);
         let session = Sonora::global(cx).session.clone();

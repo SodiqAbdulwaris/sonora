@@ -34,6 +34,10 @@ pub enum Event {
     Next,
     Shuffle,
     Repeat,
+    /// Show or hide the mini player.
+    Overlay,
+    /// Let clicks pass through the mini player, or take them again.
+    ClickThrough,
     Quit,
 }
 
@@ -59,6 +63,10 @@ pub struct Shown {
     pub repeat: SharedString,
     pub repeat_on: bool,
     pub show: SharedString,
+    pub overlay: SharedString,
+    pub overlay_on: bool,
+    pub through: SharedString,
+    pub through_on: bool,
     pub quit: SharedString,
     pub playing: bool,
 }
@@ -128,6 +136,10 @@ impl Tray {
                         open(cx);
                     }
                     Event::Quit => cx.quit(),
+                    Event::Overlay => crate::overlay::press(crate::overlay::Press::Toggle, cx),
+                    Event::ClickThrough => {
+                        crate::overlay::press(crate::overlay::Press::ClickThrough, cx)
+                    }
                     Event::Toggle
                     | Event::Previous
                     | Event::Next
@@ -331,6 +343,8 @@ fn shown(artwork: Option<Arc<Art>>, cx: &App) -> Shown {
     let song = track.is_some_and(|track| track.id.is_some());
     let shuffle_on = Sonora::global(cx).queue.read(cx).shuffle();
     let repeat_on = playback.repeat() != Repeat::Off;
+    let settings = Sonora::global(cx).settings.read(cx);
+    let (overlay_on, through_on) = (settings.overlay(), settings.overlay_click_through());
     Shown {
         artwork,
         caption,
@@ -346,6 +360,10 @@ fn shown(artwork: Option<Arc<Art>>, cx: &App) -> Shown {
         repeat: t!("player-repeat"),
         repeat_on,
         show: t!("tray-show"),
+        overlay: t!("tray-overlay"),
+        overlay_on,
+        through: t!("tray-through"),
+        through_on,
         quit: t!("app-quit"),
         playing,
     }

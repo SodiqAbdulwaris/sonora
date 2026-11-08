@@ -34,6 +34,8 @@ pub struct Icon {
     shuffle: CheckMenuItem,
     repeat: CheckMenuItem,
     show: MenuItem,
+    overlay: CheckMenuItem,
+    through: CheckMenuItem,
     quit: MenuItem,
 }
 
@@ -54,6 +56,8 @@ impl Icon {
         let shuffle = CheckMenuItem::with_id("shuffle", "", true, false, None);
         let repeat = CheckMenuItem::with_id("repeat", "", true, false, None);
         let show = MenuItem::with_id("show", "", true, None);
+        let overlay = CheckMenuItem::with_id("overlay", "", true, false, None);
+        let through = CheckMenuItem::with_id("through", "", true, false, None);
         let quit = MenuItem::with_id("quit", "", true, None);
         let menu = Menu::new();
         if let Err(error) = menu.append_items(&[
@@ -65,6 +69,9 @@ impl Icon {
             &PredefinedMenuItem::separator(),
             &shuffle,
             &repeat,
+            &PredefinedMenuItem::separator(),
+            &overlay,
+            &through,
             &PredefinedMenuItem::separator(),
             &show,
             &quit,
@@ -105,6 +112,8 @@ impl Icon {
             shuffle,
             repeat,
             show,
+            overlay,
+            through,
             quit,
         })
     }
@@ -165,6 +174,10 @@ impl Icon {
         self.repeat.set_text(&shown.repeat);
         self.repeat.set_checked(shown.repeat_on);
         self.show.set_text(&shown.show);
+        self.overlay.set_text(&shown.overlay);
+        self.overlay.set_checked(shown.overlay_on);
+        self.through.set_text(&shown.through);
+        self.through.set_checked(shown.through_on);
         self.quit.set_text(&shown.quit);
     }
 }
@@ -270,6 +283,8 @@ fn translate(id: &MenuId) -> Option<Event> {
         "next" => Event::Next,
         "shuffle" => Event::Shuffle,
         "repeat" => Event::Repeat,
+        "overlay" => Event::Overlay,
+        "through" => Event::ClickThrough,
         "show" => Event::Show,
         "quit" => Event::Quit,
         _ => return None,

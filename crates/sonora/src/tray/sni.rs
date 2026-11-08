@@ -192,6 +192,9 @@ impl ksni::Tray for Item {
             self.checkmark(&shown.shuffle, shown.shuffle_on, Event::Shuffle),
             self.checkmark(&shown.repeat, shown.repeat_on, Event::Repeat),
             MenuItem::Separator,
+            self.checkmark(&shown.overlay, shown.overlay_on, Event::Overlay),
+            self.checkmark(&shown.through, shown.through_on, Event::ClickThrough),
+            MenuItem::Separator,
             self.entry(&shown.show, Event::Show),
             self.entry(&shown.quit, Event::Quit),
         ]

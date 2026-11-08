@@ -14,7 +14,7 @@ const ENTRIES: &str = "entries";
 
 impl SettingsView {
     pub(super) fn general_groups(&self, cx: &App) -> Vec<Group> {
-        vec![
+        let mut groups = vec![
             Group::new("settings-group-startup", "icons/house.svg").rows([
                 Slot::Startup,
                 Slot::Entries,
@@ -29,7 +29,9 @@ impl SettingsView {
                 Slot::Saver,
             ]),
             Group::new("settings-group-context-menus", "icons/list.svg").rows([Slot::AdaptiveMenu]),
-        ]
+        ];
+        groups.extend(self.overlay_groups());
+        groups
     }
 
     /// The rows about the window's own frame, which differ by platform.

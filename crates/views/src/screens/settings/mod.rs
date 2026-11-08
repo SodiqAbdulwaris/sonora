@@ -34,6 +34,7 @@ mod header;
 mod layout;
 mod lyrics;
 mod now_playing;
+mod overlay;
 mod playback;
 mod player_bar;
 mod preview;
@@ -41,6 +42,7 @@ mod rows;
 mod scrobbling;
 mod sessions;
 mod sound;
+mod spotify;
 mod storage;
 mod themes;
 
@@ -115,6 +117,16 @@ enum Slot {
     SpotifyConnect,
     SpotifyConnectName,
     SpotifyConnectCustom,
+    SpotifyRoute,
+    SpotifyRouteStatus,
+    SoloistKey,
+    Overlay,
+    OverlayCorner,
+    OverlayThrough,
+    OverlayAutoShow,
+    OverlayOnTop,
+    OverlayToggle,
+    OverlayClickShortcut,
     SessionsButton,
     SessionsOfficial,
     SessionsServer,
@@ -265,6 +277,11 @@ pub struct SettingsView {
     scrobble_second: Entity<Input>,
     /// The field for the custom name Sonora goes by in Spotify's device list.
     connect_name: Entity<Input>,
+    /// The field for the API key Soloist starts with, masked and emptied once saved.
+    soloist_key: Entity<Input>,
+    /// The fields for the overlay's two global shortcuts, which a button applies.
+    overlay_toggle: Entity<Input>,
+    overlay_click_shortcut: Entity<Input>,
     /// The address of the listener's own Sonora Sessions server.
     sessions_server: Entity<Input>,
     /// The service whose link dialog is open, by slug.
@@ -385,6 +402,20 @@ impl SettingsView {
         })
         .detach();
 
+        let soloist_key = cx.new(|cx| {
+            Input::new("settings-soloist-key-hint", cx)
+                .compact()
+                .masked()
+        });
+        let overlay_toggle =
+            cx.new(|cx| Input::new("settings-overlay-shortcut-hint", cx).compact());
+        let shortcut = settings.read(cx).overlay_toggle().to_string();
+        overlay_toggle.update(cx, |input, cx| input.set_text(shortcut, cx));
+        let overlay_click_shortcut =
+            cx.new(|cx| Input::new("settings-overlay-shortcut-hint", cx).compact());
+        let shortcut = settings.read(cx).overlay_click_shortcut().to_string();
+        overlay_click_shortcut.update(cx, |input, cx| input.set_text(shortcut, cx));
+
         let sessions_server =
             cx.new(|cx| Input::new("settings-sessions-server-hint", cx).compact());
         let typed = settings.read(cx).sessions_server().to_owned();
@@ -447,6 +478,9 @@ impl SettingsView {
             scrobble_first: cx.new(|cx| Input::new("settings-scrobble-key", cx)),
             scrobble_second: cx.new(|cx| Input::new("settings-scrobble-secret", cx)),
             connect_name,
+            soloist_key,
+            overlay_toggle,
+            overlay_click_shortcut,
             sessions_server,
             scrobble_prompt: None,
             languages,
@@ -889,6 +923,43 @@ impl SettingsView {
                 t!("settings-spotify-connect-custom"),
                 t!("settings-spotify-connect-custom-detail"),
             ),
+            Slot::SpotifyRoute => (
+                t!("settings-spotify-route"),
+                t!("settings-spotify-route-detail"),
+            ),
+            Slot::SpotifyRouteStatus => (
+                t!("settings-spotify-route-status"),
+                self.spotify_route_detail(cx),
+            ),
+            Slot::SoloistKey => (
+                t!("settings-soloist-key"),
+                t!("settings-soloist-key-detail"),
+            ),
+            Slot::Overlay => (t!("settings-overlay"), t!("settings-overlay-detail")),
+            Slot::OverlayCorner => (
+                t!("settings-overlay-corner"),
+                t!("settings-overlay-corner-detail"),
+            ),
+            Slot::OverlayThrough => (
+                t!("settings-overlay-through"),
+                t!("settings-overlay-through-detail"),
+            ),
+            Slot::OverlayAutoShow => (
+                t!("settings-overlay-auto-show"),
+                t!("settings-overlay-auto-show-detail"),
+            ),
+            Slot::OverlayOnTop => (
+                t!("settings-overlay-on-top"),
+                t!("settings-overlay-on-top-detail"),
+            ),
+            Slot::OverlayToggle => (
+                t!("settings-overlay-toggle"),
+                t!("settings-overlay-toggle-detail"),
+            ),
+            Slot::OverlayClickShortcut => (
+                t!("settings-overlay-click-shortcut"),
+                t!("settings-overlay-click-shortcut-detail"),
+            ),
             Slot::SessionsButton => (t!("settings-sessions-button"), SharedString::default()),
             Slot::SessionsOfficial => (t!("settings-sessions-official"), SharedString::default()),
             Slot::SessionsServer => (t!("settings-sessions-server"), SharedString::default()),
@@ -1015,6 +1086,16 @@ impl SettingsView {
             Slot::SpotifyConnect => self.spotify_connect_row(cx),
             Slot::SpotifyConnectName => self.spotify_connect_name_row(cx),
             Slot::SpotifyConnectCustom => self.spotify_connect_custom_row(),
+            Slot::SpotifyRoute => self.spotify_route_row(cx),
+            Slot::SpotifyRouteStatus => self.spotify_route_status_row(cx),
+            Slot::SoloistKey => self.soloist_key_row(cx),
+            Slot::Overlay => self.overlay_row(cx),
+            Slot::OverlayCorner => self.overlay_corner_row(cx),
+            Slot::OverlayThrough => self.overlay_through_row(cx),
+            Slot::OverlayAutoShow => self.overlay_auto_show_row(cx),
+            Slot::OverlayOnTop => self.overlay_on_top_row(cx),
+            Slot::OverlayToggle => self.overlay_toggle_row(cx),
+            Slot::OverlayClickShortcut => self.overlay_click_shortcut_row(cx),
             Slot::SessionsButton => self.sessions_button_row(cx),
             Slot::SessionsOfficial => self.sessions_official_row(cx),
             Slot::SessionsServer => self.sessions_server_row(cx),
