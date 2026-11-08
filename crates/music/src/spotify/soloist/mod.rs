@@ -62,7 +62,13 @@ pub(crate) fn start(config: &PlaybackConfig, status: &BackendStatus) -> Result<S
                 .build();
             let result = match runtime {
                 Ok(runtime) => runtime.block_on(run(
-                    settings, status, interval, volume, command_rx, events_tx,
+                    settings,
+                    status,
+                    interval,
+                    volume,
+                    command_rx,
+                    events_tx,
+                    fault_tx.clone(),
                 )),
                 Err(error) => Err(Problem::Stopped(format!("cannot start a runtime: {error}"))),
             };
@@ -174,6 +180,7 @@ async fn run(
     volume: u8,
     mut commands: UnboundedReceiver<Cmd>,
     events: UnboundedSender<PlaybackEvent>,
+    faults: UnboundedSender<Problem>,
 ) -> Result<(), Problem> {
     let stopped = |error: &dyn std::fmt::Display| Problem::Stopped(error.to_string());
     let mut child =
@@ -190,7 +197,7 @@ async fn run(
     let mut ticks = tokio::time::interval(interval);
     let mut watch = tokio::time::interval(WATCH);
     let first = tracker.command(Cmd::Volume(volume), now());
-    flush(first, &mut sink, &events).await?;
+    flush(first, &mut sink, &events, &faults).await?;
 
     loop {
         let step = tokio::select! {
@@ -216,7 +223,7 @@ async fn run(
                 None => continue,
             },
         };
-        flush(step, &mut sink, &events).await?;
+        flush(step, &mut sink, &events, &faults).await?;
     }
 }
 
@@ -225,6 +232,7 @@ async fn flush(
     step: Step,
     sink: &mut Socket,
     events: &UnboundedSender<PlaybackEvent>,
+    faults: &UnboundedSender<Problem>,
 ) -> Result<(), Problem> {
     for frame in step.wire {
         sink.send(Message::text(frame))
@@ -234,8 +242,9 @@ async fn flush(
     for event in step.events {
         events.send(event).ok();
     }
-    match step.fault {
-        Some(Fault::NotPaired) => Err(Problem::NeedsPairing),
-        None => Ok(()),
+    // not being paired passes once the listener pairs, so Soloist stays up and only says so
+    if let Some(Fault::NotPaired) = step.fault {
+        faults.send(Problem::NeedsPairing).ok();
     }
+    Ok(())
 }

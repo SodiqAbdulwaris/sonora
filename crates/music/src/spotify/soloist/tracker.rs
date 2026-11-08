@@ -18,6 +18,9 @@ const LANDED: Duration = Duration::from_secs(1);
 const PATIENCE_MS: u64 = 12_000;
 /// How close to the end of a track a stop must come to be the track ending.
 const NEAR_END: Duration = Duration::from_millis(1500);
+/// How long a started Soloist has to log in before it is called unpaired. It takes a couple of
+/// seconds to come up, and says it is not logged in until it has.
+const LOGIN_PATIENCE_MS: u64 = 12_000;
 
 /// What the player asks for. Each is the Soloist side of one `Player` method.
 #[derive(Debug)]
@@ -45,7 +48,7 @@ pub(super) enum Cmd {
     Volume(u8),
 }
 
-/// Why Soloist cannot be used any more.
+/// What stops Soloist playing, which may pass once the listener has put it right.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Fault {
     /// No Spotify app has paired with it, or the pairing was lost.
@@ -103,11 +106,26 @@ pub(super) struct Tracker {
     /// Whether the last thing said up about `want` was that it plays, so a repeated state from
     /// Soloist is not said twice.
     playing: bool,
+    /// Whether Soloist has logged in, which every control command needs.
+    signed_in: bool,
+    /// When this tracker first heard from anyone, which the wait for a login counts from.
+    since: Option<u64>,
+    /// Whether the fault for a missing login has been raised.
+    unpaired_said: bool,
+    /// The load asked for before Soloist logged in, sent once it has.
+    pending: Option<Cmd>,
+    /// The volume asked for before Soloist logged in.
+    volume: Option<u8>,
 }
 
 impl Tracker {
     pub(super) fn command(&mut self, cmd: Cmd, now: u64) -> Step {
         let mut out = Step::default();
+        self.since.get_or_insert(now);
+        if !self.signed_in && !matches!(cmd, Cmd::Hold { .. }) {
+            self.unsigned(cmd);
+            return out;
+        }
         match cmd {
             Cmd::Load { id, at, seamless } => self.load(id, at, seamless, now, &mut out),
             Cmd::Hold { id, at } => {
@@ -159,14 +177,32 @@ impl Tracker {
 
     pub(super) fn message(&mut self, message: Incoming, now: u64) -> Step {
         let mut out = Step::default();
+        self.since.get_or_insert(now);
         match message {
             Incoming::AuthState {
                 logged_in,
                 is_active,
             } => {
                 self.active = is_active;
-                if !logged_in {
-                    out.fault = Some(Fault::NotPaired);
+                match (logged_in, self.signed_in) {
+                    (true, false) => {
+                        self.signed_in = true;
+                        self.unpaired_said = false;
+                        if let Some(percent) = self.volume.take() {
+                            out.wire.push(wire::volume(percent));
+                        }
+                        if let Some(cmd) = self.pending.take() {
+                            let sent = self.command(cmd, now);
+                            out.events.extend(sent.events);
+                            out.wire.extend(sent.wire);
+                        }
+                    }
+                    (false, true) => {
+                        self.signed_in = false;
+                        self.unpaired_said = true;
+                        out.fault = Some(Fault::NotPaired);
+                    }
+                    _ => {}
                 }
             }
             Incoming::DeviceChanged { is_active } => self.active = is_active,
@@ -199,6 +235,13 @@ impl Tracker {
     /// never came.
     pub(super) fn tick(&mut self, now: u64) -> Step {
         let mut out = Step::default();
+        let since = *self.since.get_or_insert(now);
+        if !self.signed_in && !self.unpaired_said && now.saturating_sub(since) > LOGIN_PATIENCE_MS {
+            self.unpaired_said = true;
+            // a track asked for then must not start by itself once the pairing is done
+            self.pending = None;
+            out.fault = Some(Fault::NotPaired);
+        }
         if let Some(landing) = self.landing.take_if(|landing| now >= landing.deadline) {
             log::warn!("soloist: audio from {:?} never arrived", landing.at);
             out.events.push(match landing.kind {
@@ -221,6 +264,31 @@ impl Tracker {
             });
         }
         out
+    }
+
+    /// A command that arrives before Soloist has logged in. A load waits for the login, as does
+    /// the volume, and nothing else can be done yet.
+    fn unsigned(&mut self, cmd: Cmd) {
+        match cmd {
+            Cmd::Load { id, at, .. } => {
+                self.pending = Some(Cmd::Load {
+                    id,
+                    at,
+                    seamless: false,
+                });
+            }
+            Cmd::Play => {
+                if let Some((id, at)) = self.held.take() {
+                    self.pending = Some(Cmd::Load {
+                        id,
+                        at,
+                        seamless: false,
+                    });
+                }
+            }
+            Cmd::Volume(percent) => self.volume = Some(percent),
+            Cmd::Hold { .. } | Cmd::Preload { .. } | Cmd::Pause | Cmd::Seek(_) => {}
+        }
     }
 
     fn load(&mut self, id: String, at: Duration, seamless: bool, now: u64, out: &mut Step) {
@@ -373,19 +441,13 @@ impl Tracker {
         }
     }
 
-    /// Soloist refused a command. A refusal for lack of a login is the pairing being gone, and
-    /// any other while a track is loading is that track failing.
+    /// Soloist refused a command. While a track is loading that is the track failing.
     fn rejected(&mut self, message: &str, out: &mut Step) {
         log::warn!("soloist: {message}");
-        match message.contains("authentication") {
-            true => out.fault = Some(Fault::NotPaired),
-            false => {
-                if let Some(landing) = self.landing.take_if(|landing| landing.kind == Kind::Play) {
-                    out.events.push(PlaybackEvent::Unavailable {
-                        id: Some(landing.id),
-                    });
-                }
-            }
+        if let Some(landing) = self.landing.take_if(|landing| landing.kind == Kind::Play) {
+            out.events.push(PlaybackEvent::Unavailable {
+                id: Some(landing.id),
+            });
         }
     }
 

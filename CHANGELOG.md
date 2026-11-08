@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Spotify plays through Spotify's own Soloist player when it is installed, for accounts that librespot is refused the audio keys for.
+- A mini player stays above other windows, folds into a spinning disc, lets clicks pass through, and answers global shortcuts on Windows.
+
 ### Changed
 
 - Nightly updates reuse released executables after a stable release, so they become available sooner.
