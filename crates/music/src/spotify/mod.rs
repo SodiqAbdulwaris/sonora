@@ -16,8 +16,10 @@ mod playback;
 mod playlists;
 mod profiles;
 mod radio;
+mod route;
 mod search;
 mod sink;
+mod soloist;
 mod wire;
 
 use std::sync::Arc;
@@ -34,6 +36,7 @@ use crate::{
 pub use auth::AuthConfig;
 pub use client::LibrespotClient;
 pub use lyrics::SpotifyLyrics;
+pub(crate) use soloist::{has_key, store_key};
 
 pub struct SpotifyProvider {
     config: AuthConfig,
@@ -60,7 +63,7 @@ impl SpotifyProvider {
 
     async fn session(&self, client: LibrespotClient) -> Result<ProviderSession> {
         let profile = client.profile().await?;
-        let playback = Arc::new(Factory::new(client.session().clone()));
+        let playback = Arc::new(route::Routes::new(client.session().clone()));
         Ok(ProviderSession {
             profile,
             api: Arc::new(client),

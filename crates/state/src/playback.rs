@@ -6,6 +6,7 @@ use std::time::{Duration, Instant, SystemTime};
 use anyhow::Result;
 use futures::future::BoxFuture;
 use gpui::{App, AppContext as _, Context, Entity, EventEmitter, SharedString, Task, WeakEntity};
+use music::backend::{BackendChoice, BackendStatus};
 use music::connect::{self, Command, Repeat};
 use music::vault::Vault;
 use music::{
@@ -425,6 +426,10 @@ pub struct Playback {
     gapless: bool,
     transcode: Transcode,
     quality: Quality,
+    /// Which routes Spotify may play through.
+    backend: BackendChoice,
+    /// Shared with every engine, which says through which route it plays and why not the others.
+    backend_status: BackendStatus,
     /// Whether tracks that played are cached in `vault`, so playing one again downloads nothing.
     keep_tracks: bool,
     /// How many gigabytes the cache in `vault` may take.
@@ -587,6 +592,7 @@ impl Playback {
         let normalisation = settings.read(cx).normalisation();
         let gapless = settings.read(cx).gapless();
         let transcode = settings.read(cx).transcode();
+        let backend = settings.read(cx).spotify_backend();
         let quality = settings.read(cx).quality();
         let keep_tracks = settings.read(cx).keep_tracks();
         let cache_gb = settings.read(cx).cache_gb();
@@ -613,6 +619,8 @@ impl Playback {
             gapless,
             transcode,
             quality,
+            backend,
+            backend_status: BackendStatus::default(),
             keep_tracks,
             cache_gb,
             vault,
@@ -2358,6 +2366,29 @@ impl Playback {
         self.transcode
     }
 
+    /// Which routes Spotify may play through.
+    pub fn backend(&self) -> BackendChoice {
+        self.backend
+    }
+
+    /// Which route Spotify plays through and why the others do not, for the views to show.
+    pub fn backend_report(&self) -> music::backend::Report {
+        self.backend_status.get()
+    }
+
+    /// Lets Spotify play through `backend`, starting the engine over so it takes effect.
+    pub fn set_backend(&mut self, backend: BackendChoice, cx: &mut Context<Self>) {
+        if self.backend == backend {
+            return;
+        }
+        self.backend = backend;
+        self.settings
+            .update(cx, |settings, cx| settings.set_spotify_backend(backend, cx));
+        if let Some(playback) = self.session.read(cx).playback() {
+            self.rebind(playback, cx);
+        }
+    }
+
     pub fn quality(&self) -> Quality {
         self.quality
     }
@@ -2683,6 +2714,8 @@ impl Playback {
             meter: self.meter.clone(),
             analyzer: self.analyzer.clone(),
             vault: Some(self.vault.clone()),
+            backend: self.backend,
+            status: self.backend_status.clone(),
         };
         let (engine, events) = playback.start(config);
 
@@ -2710,6 +2743,8 @@ impl Playback {
             meter: self.meter.clone(),
             analyzer: self.analyzer.clone(),
             vault: Some(self.vault.clone()),
+            backend: self.backend,
+            status: self.backend_status.clone(),
         };
         let (engine, events) = playback.start(config);
 

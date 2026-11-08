@@ -2,6 +2,7 @@ mod aac;
 pub mod apple;
 pub mod artwork;
 mod audio;
+pub mod backend;
 pub mod binimum;
 mod calendar;
 pub mod connect;
@@ -426,6 +427,10 @@ pub struct PlaybackConfig {
     pub analyzer: Analyzer,
     /// Where tracks are kept, the downloads and, while caching is on, the ones that played.
     pub vault: Option<Arc<vault::Vault>>,
+    /// Which routes a provider with more than one may play through. Only Spotify has more.
+    pub backend: backend::BackendChoice,
+    /// Shared like `meter`: the player says which route is playing and why the others are not.
+    pub status: backend::BackendStatus,
 }
 
 /// How good a stream to ask a streaming service for. Each provider lists the levels it serves in
