@@ -12,8 +12,26 @@ use ui::{ActiveTheme as _, Copy, Cut, Look, Paste, SelectAll, Theme};
 /// How far one font size shortcut moves the size, the same step as the buttons in Settings.
 const FONT_STEP: f32 = 1.;
 
+/// Binds the shortcuts the user changed in Settings now and again whenever they change them.
+/// Clearing is safe because `input::bindings` is the only place keys are bound.
+pub fn follow_shortcuts(cx: &mut App) {
+    let settings = Sonora::global(cx).settings.clone();
+    let mut applied = None;
+    cx.observe(&settings, move |settings, cx| {
+        let changed = settings.read(cx).shortcuts().clone();
+        if applied.as_ref() == Some(&changed) {
+            return;
+        }
+        cx.clear_key_bindings();
+        cx.bind_keys(input::bindings(&changed));
+        applied = Some(changed);
+    })
+    .detach();
+    settings.update(cx, |_, cx| cx.notify());
+}
+
 pub fn register(lingers: bool, cx: &mut App) {
-    cx.bind_keys(input::bindings());
+    cx.bind_keys(input::bindings(&input::Overrides::new()));
 
     cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
     cx.on_action(|_: &Hide, cx: &mut App| cx.hide());

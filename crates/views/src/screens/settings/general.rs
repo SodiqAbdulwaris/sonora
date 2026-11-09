@@ -31,6 +31,7 @@ impl SettingsView {
             Group::new("settings-group-context-menus", "icons/list.svg").rows([Slot::AdaptiveMenu]),
         ];
         groups.extend(self.overlay_groups());
+        groups.extend(self.shortcut_groups());
         groups
     }
 

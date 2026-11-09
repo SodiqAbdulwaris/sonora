@@ -42,13 +42,18 @@ actions!(
     ]
 );
 
+mod remap;
+pub use remap::{COMMANDS, Command, Invalid, Overrides, Scope, Stance, check, holder, stance};
+
 pub const WORKSPACE_CONTEXT: &str = "Workspace";
 pub const SEARCH_CONTEXT: &str = "Search";
 
 /// Every key binding, in precedence order: GPUI prefers the deepest matching context and,
 /// within one, the binding registered last, so the macOS set at the end overrides the shared one.
-pub fn bindings() -> Vec<KeyBinding> {
+/// `overrides` are the user's changes to the shortcuts in `COMMANDS`.
+pub fn bindings(overrides: &Overrides) -> Vec<KeyBinding> {
     let mut bindings = shared();
+    bindings.extend(remap::bindings(overrides));
     if cfg!(target_os = "macos") {
         bindings.extend(macos());
     }
@@ -100,14 +105,6 @@ fn shared() -> Vec<KeyBinding> {
         KeyBinding::new("alt-right", NavigateForward, None),
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("ctrl-q", Quit, None),
-        KeyBinding::new("cmd-r", Refresh, None),
-        KeyBinding::new("ctrl-r", Refresh, None),
-        KeyBinding::new("cmd-f", OpenFilter, None),
-        KeyBinding::new("ctrl-f", OpenFilter, None),
-        KeyBinding::new("shift-cmd-f", OpenSearch, None),
-        KeyBinding::new("shift-ctrl-f", OpenSearch, None),
-        KeyBinding::new("ctrl-,", OpenSettings, None),
-        KeyBinding::new("cmd-,", OpenSettings, None),
         KeyBinding::new("cmd-=", IncreaseFontSize, None),
         KeyBinding::new("ctrl-=", IncreaseFontSize, None),
         KeyBinding::new("cmd-+", IncreaseFontSize, None),
@@ -116,10 +113,6 @@ fn shared() -> Vec<KeyBinding> {
         KeyBinding::new("ctrl--", DecreaseFontSize, None),
         KeyBinding::new("cmd-0", ResetFontSize, None),
         KeyBinding::new("ctrl-0", ResetFontSize, None),
-        KeyBinding::new("space", TogglePlayback, Some(&away_from_text)),
-        KeyBinding::new("ctrl-left", SongPrevious, Some(&away_from_text)),
-        KeyBinding::new("ctrl-right", SongNext, Some(&away_from_text)),
-        KeyBinding::new("f", ToggleFullscreen, Some(&away_from_text)),
         KeyBinding::new("f11", ToggleWindowFullscreen, None),
         KeyBinding::new("cmd-z", Undo, Some(&away_from_text)),
         KeyBinding::new("ctrl-z", Undo, Some(&away_from_text)),

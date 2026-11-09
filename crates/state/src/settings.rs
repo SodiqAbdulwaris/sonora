@@ -456,6 +456,9 @@ struct Values {
     overlay_toggle: String,
     /// The global shortcut that lets clicks through the overlay or takes them again.
     overlay_click_shortcut: String,
+    /// The changed keyboard shortcuts, command id to keystroke. An empty text unbinds the command.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    shortcuts: BTreeMap<String, String>,
     language: String,
     #[serde(default = "system_font")]
     font: String,
@@ -668,6 +671,7 @@ impl Default for Values {
             overlay_on_top: true,
             overlay_toggle: Shortcut::TOGGLE.to_string(),
             overlay_click_shortcut: Shortcut::CLICK_THROUGH.to_string(),
+            shortcuts: BTreeMap::new(),
             language: i18n::AUTO.to_owned(),
             font: system_font(),
             startup: DEFAULT_STARTUP.to_owned(),
@@ -1257,6 +1261,11 @@ impl AppSettings {
             .overlay_toggle
             .parse()
             .unwrap_or(Shortcut::TOGGLE)
+    }
+
+    /// The keyboard shortcuts the user changed, command id to keystroke.
+    pub fn shortcuts(&self) -> &BTreeMap<String, String> {
+        &self.values.shortcuts
     }
 
     /// The shortcut that lets clicks through the overlay, or takes them again.
@@ -1908,6 +1917,21 @@ impl AppSettings {
         self.values.overlay_toggle = shortcut.to_string();
         self.schedule_save(cx);
         Ok(())
+    }
+
+    /// Sets the keystroke of a command, or leaves it unbound when `keys` is `None`. The caller has
+    /// checked the keystroke.
+    pub fn set_shortcut(&mut self, id: &str, keys: Option<String>, cx: &mut Context<Self>) {
+        self.values
+            .shortcuts
+            .insert(id.to_owned(), keys.unwrap_or_default());
+        self.schedule_save(cx);
+    }
+
+    /// Puts every command back on its factory shortcut.
+    pub fn reset_shortcuts(&mut self, cx: &mut Context<Self>) {
+        self.values.shortcuts.clear();
+        self.schedule_save(cx);
     }
 
     /// Sets the shortcut that lets clicks through the overlay, or says why the text is not one.

@@ -138,8 +138,35 @@ impl SettingsView {
         ) -> Result<(), InvalidShortcut>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let typed = field.clone();
         let settings = self.settings.clone();
+
+        self.shortcut_fields(
+            title,
+            button,
+            field,
+            move |text, cx| match settings.update(cx, |settings, cx| apply(settings, text, cx)) {
+                Ok(()) => {}
+                Err(InvalidShortcut::Empty | InvalidShortcut::Incomplete) => {
+                    Toasts::show(Outcome::Failed, "toast-overlay-shortcut-incomplete", cx)
+                }
+                Err(InvalidShortcut::Key) => {
+                    Toasts::show(Outcome::Failed, "toast-overlay-shortcut-key", cx)
+                }
+            },
+            cx,
+        )
+    }
+
+    /// The row for a shortcut: `field` for the text and a button that hands it to `save`.
+    pub(super) fn shortcut_fields(
+        &self,
+        title: gpui::SharedString,
+        button: &'static str,
+        field: Entity<Input>,
+        save: impl Fn(&str, &mut gpui::App) + 'static,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let typed = field.clone();
 
         self.yielding_row(
             title,
@@ -159,21 +186,7 @@ impl SettingsView {
                         .label(t!("settings-overlay-shortcut-save"))
                         .on_click(cx.listener(move |_, _, _, cx| {
                             let text = typed.read(cx).text().to_owned();
-                            let applied =
-                                settings.update(cx, |settings, cx| apply(settings, &text, cx));
-                            match applied {
-                                Ok(()) => {}
-                                Err(InvalidShortcut::Empty | InvalidShortcut::Incomplete) => {
-                                    Toasts::show(
-                                        Outcome::Failed,
-                                        "toast-overlay-shortcut-incomplete",
-                                        cx,
-                                    )
-                                }
-                                Err(InvalidShortcut::Key) => {
-                                    Toasts::show(Outcome::Failed, "toast-overlay-shortcut-key", cx)
-                                }
-                            }
+                            save(&text, cx);
                         })),
                 )
                 .into_any_element(),

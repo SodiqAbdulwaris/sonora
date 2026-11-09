@@ -197,6 +197,7 @@ fn main() -> ExitCode {
         gestures::install(cx);
         memory::watch(cx);
         overlay::install(cx);
+        actions::follow_shortcuts(cx);
 
         open_window(cx);
         let session = Sonora::global(cx).session.clone();

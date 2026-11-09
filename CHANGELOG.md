@@ -11,6 +11,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Spotify plays through Spotify's own Soloist player when it is installed, for accounts that librespot is refused the audio keys for.
 - A mini player stays above other windows, folds into a spinning disc, lets clicks pass through, and answers global shortcuts on Windows.
+- The keyboard shortcuts for playback, search, filter, refresh and settings can be changed in Settings, and a key another command already uses is refused.
 
 ### Changed
 

@@ -41,6 +41,7 @@ mod preview;
 mod rows;
 mod scrobbling;
 mod sessions;
+mod shortcuts;
 mod sound;
 mod spotify;
 mod storage;
@@ -127,6 +128,8 @@ enum Slot {
     OverlayOnTop,
     OverlayToggle,
     OverlayClickShortcut,
+    Shortcut(usize),
+    ShortcutsReset,
     SessionsButton,
     SessionsOfficial,
     SessionsServer,
@@ -282,6 +285,8 @@ pub struct SettingsView {
     /// The fields for the overlay's two global shortcuts, which a button applies.
     overlay_toggle: Entity<Input>,
     overlay_click_shortcut: Entity<Input>,
+    /// The fields for the keyboard shortcuts, one per command in `input::COMMANDS`.
+    shortcuts: Vec<Entity<Input>>,
     /// The address of the listener's own Sonora Sessions server.
     sessions_server: Entity<Input>,
     /// The service whose link dialog is open, by slug.
@@ -416,6 +421,8 @@ impl SettingsView {
         let shortcut = settings.read(cx).overlay_click_shortcut().to_string();
         overlay_click_shortcut.update(cx, |input, cx| input.set_text(shortcut, cx));
 
+        let shortcuts = Self::shortcut_inputs(&settings, cx);
+
         let sessions_server =
             cx.new(|cx| Input::new("settings-sessions-server-hint", cx).compact());
         let typed = settings.read(cx).sessions_server().to_owned();
@@ -481,6 +488,7 @@ impl SettingsView {
             soloist_key,
             overlay_toggle,
             overlay_click_shortcut,
+            shortcuts,
             sessions_server,
             scrobble_prompt: None,
             languages,
@@ -960,6 +968,11 @@ impl SettingsView {
                 t!("settings-overlay-click-shortcut"),
                 t!("settings-overlay-click-shortcut-detail"),
             ),
+            Slot::Shortcut(index) => Self::shortcut_meta(index)?,
+            Slot::ShortcutsReset => (
+                t!("settings-shortcuts-reset"),
+                t!("settings-shortcuts-reset-detail"),
+            ),
             Slot::SessionsButton => (t!("settings-sessions-button"), SharedString::default()),
             Slot::SessionsOfficial => (t!("settings-sessions-official"), SharedString::default()),
             Slot::SessionsServer => (t!("settings-sessions-server"), SharedString::default()),
@@ -1096,6 +1109,8 @@ impl SettingsView {
             Slot::OverlayOnTop => self.overlay_on_top_row(cx),
             Slot::OverlayToggle => self.overlay_toggle_row(cx),
             Slot::OverlayClickShortcut => self.overlay_click_shortcut_row(cx),
+            Slot::Shortcut(index) => self.command_row(index, cx),
+            Slot::ShortcutsReset => self.shortcuts_reset_row(cx),
             Slot::SessionsButton => self.sessions_button_row(cx),
             Slot::SessionsOfficial => self.sessions_official_row(cx),
             Slot::SessionsServer => self.sessions_server_row(cx),
