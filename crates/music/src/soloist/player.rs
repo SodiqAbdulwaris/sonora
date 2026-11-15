@@ -206,7 +206,11 @@ enum Command {
 /// An `add_to_queue` command awaiting Soloist's FIFO result.
 enum SentEnqueue {
     Feed,
-    Append { id: String, append: QueueAppend },
+    Append {
+        id: String,
+        append: QueueAppend,
+        feeds_next: bool,
+    },
 }
 
 /// What a daemon is started with, beyond the key.
@@ -743,10 +747,11 @@ impl Brain {
                         log::warn!("soloist: the daemon turned a command down: {message}");
                         if command == "add_to_queue" {
                             self.queue_result(false);
-                        } else if command.is_empty() {
-                            // shortcut: older Soloist errors omit the command, so retain queue
-                            // work rather than reject an unrelated append; upgrade with IDs.
-                            log::debug!("soloist: cannot attribute the command rejection");
+                        } else if command.is_empty() && !self.sent_enqueues.is_empty() {
+                            // shortcut: errors without request IDs cannot be matched safely.
+                            log::warn!("soloist: closing an uncorrelated shared-queue session");
+                            self.hang_up();
+                            self.gone(End::Failed);
                         }
                     }
                 }
@@ -1175,14 +1180,21 @@ impl Brain {
 
     /// Sends one queue addition and reports a failure instead of claiming it was accepted.
     fn send_enqueue(&mut self, id: String, append: QueueAppend) {
-        if !self.send(
-            "add_to_queue",
-            json!({ "uri": format!("{TRACK_PREFIX}{id}") }),
-        ) {
+        let uri = format!("{TRACK_PREFIX}{id}");
+        let feeds_next =
+            matches!(append, QueueAppend::Publication(_)) && self.next.as_deref() == Some(&uri);
+        if !self.send("add_to_queue", json!({ "uri": &uri })) {
             return self.report(PlaybackEvent::QueueRejected { id, append });
         }
-        self.sent_enqueues
-            .push_back(SentEnqueue::Append { id, append });
+        if feeds_next {
+            self.next = None;
+            self.fed = Some(uri);
+        }
+        self.sent_enqueues.push_back(SentEnqueue::Append {
+            id,
+            append,
+            feeds_next,
+        });
         self.send("get_queue", json!({}));
     }
 
@@ -1194,7 +1206,7 @@ impl Brain {
             self.report(PlaybackEvent::QueueRejected { id, append });
         }
         for queued in sent {
-            if let SentEnqueue::Append { id, append } = queued {
+            if let SentEnqueue::Append { id, append, .. } = queued {
                 self.report(PlaybackEvent::QueueRejected { id, append });
             }
         }
@@ -1207,10 +1219,21 @@ impl Brain {
             return;
         };
         match (accepted, queued) {
-            (true, SentEnqueue::Append { id, append }) => {
+            (true, SentEnqueue::Append { id, append, .. }) => {
                 self.report(PlaybackEvent::QueueAppended { id, append })
             }
-            (false, SentEnqueue::Append { id, append }) => {
+            (
+                false,
+                SentEnqueue::Append {
+                    id,
+                    append,
+                    feeds_next,
+                },
+            ) => {
+                if feeds_next {
+                    self.fed = None;
+                    self.next = Some(format!("{TRACK_PREFIX}{id}"));
+                }
                 self.report(PlaybackEvent::QueueRejected { id, append })
             }
             (false, SentEnqueue::Feed) => self.fed = None,
@@ -1635,6 +1658,7 @@ mod tests {
         brain.sent_enqueues.push_back(SentEnqueue::Append {
             id: "user".into(),
             append: QueueAppend::User,
+            feeds_next: false,
         });
 
         brain.queue_result(true);
@@ -1644,6 +1668,50 @@ mod tests {
         assert!(matches!(
             events.try_recv(),
             Ok(PlaybackEvent::QueueRejected { id, .. }) if id == "user"
+        ));
+    }
+
+    #[test]
+    fn unattributed_error_rejects_and_forgets_queue_work() {
+        let (mut brain, mut events) = brain();
+        brain.sent_enqueues.push_back(SentEnqueue::Append {
+            id: "collection".into(),
+            append: QueueAppend::Publication(1),
+            feeds_next: false,
+        });
+
+        brain.event(Event::Error {
+            message: "rejected".into(),
+            command: String::new(),
+        });
+
+        assert!(brain.sent_enqueues.is_empty());
+        assert!(matches!(
+            events.try_recv(),
+            Ok(PlaybackEvent::QueueRejected { id, append })
+                if id == "collection" && append == QueueAppend::Publication(1)
+        ));
+        brain.queue_result(true);
+        assert!(events.try_recv().is_err());
+    }
+
+    #[test]
+    fn rejected_publication_releases_its_gapless_feed() {
+        let (mut brain, mut events) = brain();
+        brain.fed = Some("spotify:track:collection".into());
+        brain.sent_enqueues.push_back(SentEnqueue::Append {
+            id: "collection".into(),
+            append: QueueAppend::Publication(1),
+            feeds_next: true,
+        });
+
+        brain.queue_result(false);
+
+        assert_eq!(brain.next.as_deref(), Some("spotify:track:collection"));
+        assert!(brain.fed.is_none());
+        assert!(matches!(
+            events.try_recv(),
+            Ok(PlaybackEvent::QueueRejected { append, .. }) if append == QueueAppend::Publication(1)
         ));
     }
 

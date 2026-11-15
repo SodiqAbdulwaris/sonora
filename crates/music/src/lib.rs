@@ -709,7 +709,7 @@ pub enum QueueAppend {
     /// The listener explicitly added a track to the queue.
     User,
     /// The tail of a collection Sonora is publishing to the shared queue.
-    Publication,
+    Publication(u64),
 }
 
 impl PlaybackEvent {

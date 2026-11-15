@@ -75,6 +75,7 @@ impl SoloistQueueRevision {
 
 /// Collection entries that still need an acknowledged append to Soloist's shared queue.
 struct SoloistPublish {
+    id: u64,
     tail: VecDeque<String>,
     awaiting: Option<String>,
 }
@@ -95,9 +96,14 @@ impl SoloistPublish {
         Some(id)
     }
 
+    /// Whether this publication is waiting for this exact append result.
+    fn awaits(&self, id: &str, append: QueueAppend) -> bool {
+        append == QueueAppend::Publication(self.id) && self.awaiting.as_deref() == Some(id)
+    }
+
     /// Clears the one append this publication is waiting to confirm.
-    fn confirm(&mut self, id: &str) -> bool {
-        if self.awaiting.as_deref() != Some(id) {
+    fn confirm(&mut self, id: &str, append: QueueAppend) -> bool {
+        if !self.awaits(id, append) {
             return false;
         }
         self.awaiting = None;
@@ -654,6 +660,8 @@ pub struct Playback {
     soloist_track: Option<Task<()>>,
     /// The collection tail being published to Soloist's append-only shared queue.
     soloist_publish: Option<SoloistPublish>,
+    /// Distinguishes results from replaced collection publications with the same track id.
+    soloist_publish_id: u64,
     suggest: Option<Task<()>>,
     /// The track the engine was asked to fetch ahead, so it is asked once.
     preloaded: Option<Preloaded>,
@@ -845,6 +853,7 @@ impl Playback {
             soloist_queue_revision: SoloistQueueRevision::default(),
             soloist_track: None,
             soloist_publish: None,
+            soloist_publish_id: 0,
             suggest: None,
             preloaded: None,
             skipped: None,
@@ -1423,6 +1432,16 @@ impl Playback {
                 match found {
                     Ok(track) if track.id.as_deref() == Some(&id) => {
                         let selected = this.queue.update(cx, |queue, cx| {
+                            if let Some(current) = queue
+                                .current()
+                                .filter(|current| current.id.as_deref() == Some(&id))
+                                .cloned()
+                            {
+                                return Some(current);
+                            }
+                            if let Some(track) = queue.select_id(&id, cx) {
+                                return Some(track);
+                            }
                             queue.insert([track], None, QueuePlacement::End, cx);
                             queue.select_id(&id, cx)
                         });
@@ -1454,7 +1473,11 @@ impl Playback {
             self.soloist_publish = None;
             return;
         };
-        match engine.append_to_queue(&id, QueueAppend::Publication) {
+        let publish = self
+            .soloist_publish
+            .as_ref()
+            .expect("publication was checked");
+        match engine.append_to_queue(&id, QueueAppend::Publication(publish.id)) {
             Ok(true) => {}
             Ok(false) | Err(_) => {
                 self.soloist_publish = None;
@@ -2018,10 +2041,16 @@ impl Playback {
                 .filter(|id| !music::is_local_id(id))
                 .map(str::to_owned)
                 .collect();
-            self.soloist_publish = (!ids.is_empty()).then_some(SoloistPublish {
-                tail: ids.into(),
-                awaiting: None,
-            });
+            if !ids.is_empty() {
+                self.soloist_publish_id = self.soloist_publish_id.wrapping_add(1);
+                self.soloist_publish = Some(SoloistPublish {
+                    id: self.soloist_publish_id,
+                    tail: ids.into(),
+                    awaiting: None,
+                });
+            } else {
+                self.soloist_publish = None;
+            }
         }
         true
     }
@@ -3413,9 +3442,14 @@ impl Playback {
             return;
         }
         if let BackendEvent::QueueRejected { id, append } = event {
-            if self.soloist_publish.as_ref().is_some_and(|publish| {
-                append == QueueAppend::Publication && publish.awaiting.as_deref() == Some(&id)
-            }) {
+            if matches!(append, QueueAppend::Publication(_)) {
+                if !self
+                    .soloist_publish
+                    .as_ref()
+                    .is_some_and(|publish| publish.awaits(&id, append))
+                {
+                    return;
+                }
                 self.soloist_publish = None;
                 self.soloist_queue = None;
                 self.soloist_queue_current = None;
@@ -3429,7 +3463,7 @@ impl Playback {
             if self
                 .soloist_publish
                 .as_mut()
-                .is_some_and(|publish| append == QueueAppend::Publication && publish.confirm(&id))
+                .is_some_and(|publish| publish.confirm(&id, append))
             {
                 self.publish_soloist_collection(cx);
             }
@@ -3956,7 +3990,7 @@ mod tests {
     use std::collections::VecDeque;
     use std::time::{Duration, Instant};
 
-    use music::{Track, connect::QueuedTrack};
+    use music::{QueueAppend, Track, connect::QueuedTrack};
 
     use super::{
         DEFAULT_UNMUTE_VOLUME, LiveClock, MuteMemory, SoloistPublish, SoloistQueueRevision, gain,
@@ -3976,15 +4010,30 @@ mod tests {
     #[test]
     fn soloist_collection_waits_for_its_own_append() {
         let mut publish = SoloistPublish {
+            id: 1,
             tail: VecDeque::from(["b".into(), "c".into()]),
             awaiting: None,
         };
 
         assert_eq!(publish.next().as_deref(), Some("b"));
         assert_eq!(publish.next(), None);
-        assert!(!publish.confirm("other"));
-        assert!(publish.confirm("b"));
+        assert!(!publish.confirm("other", QueueAppend::Publication(1)));
+        assert!(publish.confirm("b", QueueAppend::Publication(1)));
         assert_eq!(publish.next().as_deref(), Some("c"));
+    }
+
+    #[test]
+    fn soloist_collection_result_belongs_to_its_publication() {
+        let mut publish = SoloistPublish {
+            id: 2,
+            tail: VecDeque::from(["d".into()]),
+            awaiting: Some("b".into()),
+        };
+
+        assert!(!publish.awaits("b", QueueAppend::Publication(1)));
+        assert!(publish.awaits("b", QueueAppend::Publication(2)));
+        assert!(publish.confirm("b", QueueAppend::Publication(2)));
+        assert_eq!(publish.next().as_deref(), Some("d"));
     }
 
     #[test]
